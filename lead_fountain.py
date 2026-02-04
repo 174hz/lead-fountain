@@ -1,6 +1,24 @@
 import os
 import telebot
 import google.generativeai as genai
+import http.server
+import socketserver
+import threading
+
+# =========================================================
+# 0. RENDER HEALTH CHECK (The "Stay Alive" Hack)
+# =========================================================
+def run_health_check():
+    # Render provides a PORT environment variable; we default to 10000
+    port = int(os.environ.get("PORT", 10000))
+    handler = http.server.SimpleHTTPRequestHandler
+    # This creates a tiny web server that listens for Render's "pings"
+    with socketserver.TCPServer(("0.0.0.0", port), handler) as httpd:
+        print(f"✅ Health check server running on port {port}")
+        httpd.serve_forever()
+
+# Start the health check in the background so the bot can run simultaneously
+threading.Thread(target=run_health_check, daemon=True).start()
 
 # =========================================================
 # 1. SECURITY: LOAD API KEYS FROM ENVIRONMENT
@@ -10,7 +28,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # Safety Net: Stop the bot if keys are missing
 if not TELEGRAM_TOKEN or not GOOGLE_API_KEY:
-    print("❌ ERROR: Missing API keys! Please set TELEGRAM_TOKEN and GOOGLE_API_KEY in Railway.")
+    print("❌ ERROR: Missing API keys! Please set TELEGRAM_TOKEN and GOOGLE_API_KEY in Render.")
     exit(1)
 
 # =========================================================
@@ -58,5 +76,5 @@ def handle_message(message):
 # =========================================================
 # 4. START THE ENGINE
 # =========================================================
-# infinity_polling keeps the bot running even if there are network hiccups
+print("📡 Bot is now polling for messages...")
 bot.infinity_polling()
