@@ -1,14 +1,14 @@
 import json
 import re
-import google.generativeai as genai
+from google import genai  # Modern library for Cloudflare compatibility
 from js import Response, fetch
 
 # =========================================================
 # 1. THE BRAIN (CONTEXT-AWARE LOGIC)
 # =========================================================
 async def get_ai_reply(user_text, user_id, user_name, env):
-    genai.configure(api_key=env.GOOGLE_API_KEY)
-    model = genai.GenerativeModel('gemini-2.0-flash')
+    # Initialize the modern Client
+    client = genai.Client(api_key=env.GOOGLE_API_KEY)
 
     # 1. RETRIEVE HISTORY FROM CLOUDFLARE KV
     history_raw = await env.LEAD_HISTORY.get(str(user_id))
@@ -35,12 +35,17 @@ async def get_ai_reply(user_text, user_id, user_name, env):
     Response:
     """
 
-    response = model.generate_content(prompt)
+    # 3. Generate response using the new SDK syntax
+    response = client.models.generate_content(
+        model='gemini-2.0-flash',
+        contents=prompt
+    )
     bot_reply = response.text
 
-    # 3. SAVE HISTORY BACK TO KV
+    # 4. SAVE HISTORY BACK TO KV
     history_list.append(f"Assistant: {bot_reply}")
-    await env.LEAD_HISTORY.put(str(user_id), json.dumps(history_list), {"expirationTtl": 3600}) # Expire after 1 hour of silence
+    # Expire after 1 hour of silence to keep storage clean
+    await env.LEAD_HISTORY.put(str(user_id), json.dumps(history_list), {"expirationTtl": 3600}) 
     
     return bot_reply
 
@@ -48,7 +53,6 @@ async def get_ai_reply(user_text, user_id, user_name, env):
 # 2. CLOUDFLARE HANDLER (WEBHOOK)
 # =========================================================
 async def on_fetch(request, env):
-    # Only process POST requests from Telegram
     if request.method != "POST":
         return Response.new("System Active", status=200)
 
@@ -73,14 +77,16 @@ async def on_fetch(request, env):
             "text": bot_reply
         }
 
-        # 3. SMART PAYMENT BUTTON
-        buying_signals = ["quote", "price", "cost", "book", "appointment", "consultation", "pay"]
-        if any(signal in user_text.lower() for signal in buying_signals):
-            payload["reply_markup"] = {
-                "inline_keyboard": [[
-                    {"text": "💳 Secure Your Consultation", "url": env.PAYMENT_URL}
-                ]]
-            }
+        # 3. SMART PAYMENT BUTTON (Optional check)
+        # We check if PAYMENT_URL exists in env before showing the button
+        if hasattr(env, 'PAYMENT_URL') and env.PAYMENT_URL:
+            buying_signals = ["quote", "price", "cost", "book", "appointment", "consultation", "pay"]
+            if any(signal in user_text.lower() for signal in buying_signals):
+                payload["reply_markup"] = {
+                    "inline_keyboard": [[
+                        {"text": "💳 Secure Your Consultation", "url": env.PAYMENT_URL}
+                    ]]
+                }
 
         # Send message via Fetch API
         await fetch(tg_url, {
@@ -89,7 +95,7 @@ async def on_fetch(request, env):
             "headers": {"Content-Type": "application/json"}
         })
 
-        # 4. LEAD NOTIFICATION
+        # 4. LEAD NOTIFICATION (Phone number detection)
         if re.search(r'\d{7,}', user_text):
             alert = {
                 "chat_id": env.MY_CHAT_ID,
@@ -104,4 +110,6 @@ async def on_fetch(request, env):
         return Response.new("OK")
 
     except Exception as e:
-        return Response.new(str(e), status=500)
+        # Log error to Cloudflare Logs
+        print(f"Error: {str(e)}")
+        return Response.new("Internal Error", status=500)
