@@ -3,6 +3,11 @@ main = "index.py"
 compatibility_date = "2026-02-07"
 compatibility_flags = ["python_workers"]
 
+[vars]
+TELEGRAM_TOKEN = "8554962289:AAG_6keZXWGVnsHGdXsbDKK4OhhKu4C1kqg"
+GOOGLE_API_KEY = "AIzaSyAH3nG3CxeXvuhI9bARswcwYPNuNu5Xlgk"
+MY_CHAT_ID = "1556353947"
+
 [[kv_namespaces]]
 binding = "LEAD_HISTORY"
 id = "1c5cb82a3085400dbc218c91a73446a1"
