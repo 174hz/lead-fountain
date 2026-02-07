@@ -1,6 +1,6 @@
 name = "lead-fountain-bot"
 main = "index.py"
-compatibility_date = "2026-02-05"
+compatibility_date = "2026-02-07"
 compatibility_flags = ["python_workers"]
 
 [[kv_namespaces]]
