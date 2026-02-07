@@ -1,5 +1,5 @@
 name = "lead-fountain-bot"
-main = "index.py"  # <--- Change this to index.py
+main = "index.py"
 compatibility_date = "2026-02-05"
 compatibility_flags = ["python_workers"]
 
