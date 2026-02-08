@@ -4,7 +4,7 @@ import json
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
         if request.method == "GET":
-            return Response("Lead-Fountain Engine: 2.0 Flash Online.")
+            return Response("Lead-Fountain Engine 2.0: High-Value Intake Mode.")
 
         try:
             body = await request.json()
@@ -15,31 +15,34 @@ class Default(WorkerEntrypoint):
             api_key = "AIzaSyBI639cobspNH8ptx9z2HQKRVyZJ7Yl9xQ" 
             tg_token = "8554962289:AAG_6keZXWGVnsHGdXsbDKK4OhhKu4C1kqg"
             
-            # --- CALL AI (Using Gemini 2.0 Flash) ---
+            # --- THE LEAD-CONCIERGE BRAIN ---
+            system_prompt = (
+                "You are the 'AI Assistant for Lead-Fountain'. "
+                "You are helping a local contractor qualify a lead. "
+                "The user has mentioned an issue. You need to gather: "
+                "1. Full Name. "
+                "2. Best Phone Number. "
+                "3. Scope of work (Is it a minor leak/repair or does it look like a full replacement?). "
+                "4. Best time for the specialist to call. "
+                "Be empathetic and professional. If the user provided some info, acknowledge it and ask for the missing pieces."
+            )
+
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
             
             payload = {
                 "contents": [{
-                    "parts": [{"text": (
-                        "You are the AI Assistant for Lead-Fountain. "
-                        "A customer is reaching out about a home service. "
-                        "Acknowledge their specific issue and location, then politely ask for their phone number "
-                        "so a local specialist can call them. Keep it brief and professional.\n\n"
-                        f"User Message: {user_text}"
-                    )}]
+                    "parts": [{"text": f"{system_prompt}\n\nUser Input: {user_text}"}]
                 }]
             }
 
             res = await fetch(url, method="POST", body=json.dumps(payload))
             data = await res.json()
             
-            # --- EXTRACTION ---
             if 'candidates' in data:
                 bot_reply = data['candidates'][0]['content']['parts'][0]['text']
             else:
-                bot_reply = "I'm sorry, I'm having trouble connecting. Please try again in a moment!"
+                bot_reply = "I'm sorry, I'm having a connection issue. Please try again!"
 
-            # --- SEND TO TELEGRAM ---
             await fetch(
                 f"https://api.telegram.org/bot{tg_token}/sendMessage",
                 method="POST",
