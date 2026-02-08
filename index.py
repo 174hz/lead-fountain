@@ -3,8 +3,9 @@ import json
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
+        # 1. Health Check for your browser link
         if request.method == "GET":
-            return Response("Lead Fountain Concierge: Online.")
+            return Response("Lead-Fountain AI Engine: ONLINE. Awaiting Telegram signals.")
 
         try:
             body = await request.json()
@@ -12,46 +13,47 @@ class Default(WorkerEntrypoint):
             
             chat_id = str(body["message"]["chat"]["id"])
             user_text = body["message"].get("text", "")
-            token = "8554962289:AAG_6keZXWGVnsHGdXsbDKK4OhhKu4C1kqg"
+            
+            # --- THE SYSTEM PROMPT (The "Brand Voice") ---
+            system_instructions = (
+                "You are the 'AI Assistant for Lead-Fountain'. "
+                "You are acting on behalf of a professional roofing and home services contractor. "
+                "Your mission: Qualify the lead by being helpful, empathetic, and professional. "
+                "You must gather 4 things: Name, Location, Service Needed, and Phone Number. "
+                "If the user gives you some info, acknowledge it and ask for the rest. "
+                "Once you have all 4, tell them a Lead-Fountain specialist will call them shortly."
+            )
 
-            # 1. RETRIEVE MEMORY (State)
-            # We check if we already know this user
-            user_data_raw = await self.env.LEAD_HISTORY.get(f"state_{chat_id}")
-            user_data = json.loads(user_data_raw) if user_data_raw else {"step": "new", "name": "", "phone": "", "service": ""}
+            # --- CALLING THE GEMINI BRAIN ---
+            # Paste your 'Lead-Fountain Production' key below
+            api_key = "AIzaSyBI639cobspNH8ptx9z2HQKRVyZJ7Yl9xQ" 
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+            
+            payload = {
+                "contents": [{
+                    "parts": [{"text": f"{system_instructions}\n\nUser Input: {user_text}"}]
+                }]
+            }
 
-            # 2. THE LOGIC ENGINE (State Machine)
-            if user_data["step"] == "new":
-                if any(word in user_text.lower() for word in ["roof", "repair", "leak", "help"]):
-                    user_data["service"] = "Roofing"
-                    user_data["step"] = "collecting_contact"
-                    response_text = "I can certainly help find a roofing specialist in Guelph. Who should I ask for, and what's the best number to reach you at?"
-                else:
-                    response_text = "Hello! I'm the Millbrook Lead Assistant. Are you looking for a specific home service today (like roofing or repairs)?"
+            # We send the text to Google's AI
+            ai_res = await fetch(url, method="POST", body=json.dumps(payload))
+            ai_data = await ai_res.json()
+            
+            # Extract the AI's intelligent response
+            bot_reply = ai_data['candidates'][0]['content']['parts'][0]['text']
 
-            elif user_data["step"] == "collecting_contact":
-                # Assume the user provided details
-                user_data["contact_info"] = user_text
-                user_data["step"] = "qualified"
-                response_text = f"Perfect. I've logged your request for {user_data['service']}. A specialist will reach out to you at {user_text} soon. Anything else I can help with?"
-                
-                # LOG THE FINAL LEAD FOR THE CLIENT
-                await self.env.LEAD_HISTORY.put(f"FINAL_LEAD_{chat_id}", json.dumps(user_data))
-
-            else:
-                response_text = "Your request is already in our system! We'll be in touch shortly."
-
-            # 3. SAVE MEMORY
-            await self.env.LEAD_HISTORY.put(f"state_{chat_id}", json.dumps(user_data))
-
-            # 4. SEND RESPONSE
+            # --- SENDING TO TELEGRAM ---
+            tg_token = "8554962289:AAG_6keZXWGVnsHGdXsbDKK4OhhKu4C1kqg"
             await fetch(
-                f"https://api.telegram.org/bot{token}/sendMessage",
+                f"https://api.telegram.org/bot{tg_token}/sendMessage",
                 method="POST",
                 headers={"Content-Type": "application/json"},
-                body=json.dumps({"chat_id": chat_id, "text": response_text})
+                body=json.dumps({"chat_id": chat_id, "text": bot_reply})
             )
 
             return Response("OK", status=200)
             
         except Exception as e:
+            # If the AI fails, we log it but keep the bot from 'crashing' for the user
+            print(f"Error: {e}")
             return Response("OK", status=200)
