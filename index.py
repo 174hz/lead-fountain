@@ -1,9 +1,10 @@
 from workers import Response, WorkerEntrypoint, fetch
 import json
+import re
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
-        if request.method == "GET": return Response("Lead-Fountain: Alert System Active.")
+        if request.method == "GET": return Response("Lead-Fountain: Smart Alerts Active.")
 
         try:
             body = await request.json()
@@ -15,7 +16,8 @@ class Default(WorkerEntrypoint):
             # --- CONFIG ---
             api_key = self.env.GOOGLE_API_KEY
             tg_token = "8554962289:AAG_6keZXWGVnsHGdXsbDKK4OhhKu4C1kqg"
-            my_admin_id = "PASTE_YOUR_PERSONAL_ID_HERE" # Put your ID here
+            # Ensure this is YOUR chat ID (e.g., 67493201)
+            my_admin_id = "PASTE_YOUR_PERSONAL_ID_HERE" 
 
             # --- 1. MEMORY ---
             kv = getattr(self.env, "LEAD_HISTORY", None)
@@ -26,8 +28,7 @@ class Default(WorkerEntrypoint):
             system_prompt = (
                 "You are the AI Assistant for Lead-Fountain. Collect: Full Name, Phone, "
                 "Scope (Repair/Replace), and Best Time to Call. "
-                "Once you have ALL 4 pieces of info, tell them 'A specialist will call you shortly.' "
-                "Be brief and professional."
+                "When you have the info, thank them and say a specialist will call soon."
             )
             
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
@@ -37,10 +38,12 @@ class Default(WorkerEntrypoint):
             ai_data = await ai_res.json()
             bot_reply = ai_data['candidates'][0]['content']['parts'][0]['text']
 
-            # --- 3. LEAD DETECTION & ALERT ---
-            # If the AI says the 'specialist' line, it means the lead is complete!
-            if "specialist will call" in bot_reply.lower():
-                alert_text = f"🚨 **NEW LEAD ALERT** 🚨\n\nFull History:\n{context}\n\nGo get 'em!"
+            # --- 3. SMART ALERT DETECTION ---
+            # We look for a 10-digit style phone number in the user's text
+            has_phone = re.search(r'\d{3}[-\s]?\d{3}[-\s]?\d{4}', user_text)
+            
+            if has_phone:
+                alert_text = f"💰 **LEAD CAPTURED!** 💰\n\nDetails:\n{context}\n\nAI Reply: {bot_reply}"
                 await fetch(
                     f"https://api.telegram.org/bot{tg_token}/sendMessage",
                     method="POST",
